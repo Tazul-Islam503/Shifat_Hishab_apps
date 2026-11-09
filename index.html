@@ -5,32 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Customer Ledger with Admin Role Control</title>
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 800px; margin: auto; background-color: #f4f6f9; }
-    .box { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    h2, h3 { color: #333; }
-    input, select, button { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 10px; max-width: 800px; margin: auto; background-color: #f4f6f9; box-sizing: border-box; }
+    .box { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-x: auto; }
+    h2, h3 { color: #333; font-size: 1.3em; }
+    input, select, button { width: 100%; padding: 12px; margin: 8px 0; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; }
     button { background-color: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; }
     button:hover { background-color: #0056b3; }
     .btn-deposit { background-color: #28a745; }
     .btn-deposit:hover { background-color: #218838; }
     .btn-withdraw { background-color: #dc3545; }
     .btn-withdraw:hover { background-color: #c82333; }
-    .btn-edit { background-color: #ffc107; color: #333; padding: 5px 10px; width: auto; font-size: 0.8em; }
+    .btn-edit { background-color: #ffc107; color: #333; padding: 6px 10px; width: auto; font-size: 0.8em; }
     .btn-edit:hover { background-color: #e0a800; }
-    .balance-card { background: #e9ecef; padding: 15px; border-radius: 6px; text-align: center; font-size: 1.2em; font-weight: bold; margin: 10px 0; }
+    .balance-card { background: #e9ecef; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.1em; font-weight: bold; margin: 10px 0; }
     
-    /* Table Styling */
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-    th, td { padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 0.9em; word-wrap: break-word; }
+    /* Table Styling with Horizontal Scroll for Mobile */
+    .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 450px; }
+    th, td { padding: 8px; border: 1px solid #ddd; text-align: left; font-size: 0.85em; word-break: break-word; }
     th { background-color: #f8f9fa; color: #333; }
     
-    th:nth-child(1), td:nth-child(1) { width: 25%; } /* Date */
-    th:nth-child(2), td:nth-child(2) { width: 25%; } /* Amount */
-    th:nth-child(3), td:nth-child(3) { width: 35%; } /* Remarks */
-    th:nth-child(4), td:nth-child(4) { width: 15%; text-align: center; } /* Action */
-    
     .hidden { display: none; }
-    .logout-btn { background-color: #6c757d; width: auto; padding: 5px 15px; float: right; }
+    .logout-btn { background-color: #6c757d; width: auto; padding: 6px 12px; float: right; font-size: 0.9em; }
     .admin-section { border: 2px dashed #007bff; background-color: #eef6ff; }
   </style>
 </head>
@@ -94,19 +90,21 @@
         </div>
 
         <h4>Collection History</h4>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Amount</th>
-              <th>Remarks</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="history-body">
-            <!-- Dynamic rows -->
-          </tbody>
-        </table>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Remarks</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="history-body">
+              <!-- Dynamic rows -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -156,7 +154,6 @@
         const adminUsersRef = ref(db, 'admin_users');
         const snapshot = await get(adminUsersRef);
 
-        // প্রথমবার সিস্টেম শুরু করার সময় যদি কোনো ইউজার ডাটাবেসে না থাকে, প্রথমবার লগইনকারী অ্যাডমিন হয়ে যাবে
         if (!snapshot.exists()) {
           const userRef = ref(db, 'admin_users/' + phone);
           await set(userRef, {
@@ -190,7 +187,7 @@
       }
     };
 
-    // ২. শুধুমাত্র অ্যাডমিন অন্য নতুন ইউজার তৈরি করতে পারবে
+    // ২. শুধুমাত্র অ্যাডমিন নতুন ইউজার তৈরি করতে পারবে
     window.registerUserByAdmin = async () => {
       if (currentRole !== "admin") {
         alert("Permission denied! Only Admin can create new users.");
@@ -243,7 +240,6 @@
       document.getElementById("user-phone-display").innerText = phone;
       document.getElementById("user-role-display").innerText = role.toUpperCase();
 
-      // শুধুমাত্র Admin হলে নতুন ইউজার ক্রিয়েট করার সেকশন দেখাবে
       if (role === "admin") {
         document.getElementById("admin-create-box").classList.remove("hidden");
       } else {
@@ -396,7 +392,6 @@
           const amountColor = data.type === 'deposit' ? 'green' : 'red';
           const prefix = data.type === 'deposit' ? '+' : '-';
 
-          // এডিট বাটন শুধুমাত্র Admin দেখতে পাবে
           const actionBtnHtml = (currentRole === "admin") 
             ? `<button class="btn-edit" onclick="editTransaction('${data.id}', '${data.note}', ${data.amount})">Edit</button>` 
             : `<span style="color:#aaa; font-size:0.8em;">No Access</span>`;
@@ -410,7 +405,7 @@
           historyBody.appendChild(tr);
         });
       } else {
-        historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No transaction history found.</td></tr>`;
+        history,historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No transaction history found.</td></tr>`;
       }
     }
 
@@ -418,7 +413,7 @@
     window.editTransaction = async (txnId, oldNote, oldAmount) => {
       if (currentRole !== "admin") {
         alert("Permission Denied! Only Admin can edit transactions.");
-        return;
+      return;
       }
 
       const newNote = prompt("Edit Remarks / Note:", oldNote);
