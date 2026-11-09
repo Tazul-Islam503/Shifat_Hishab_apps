@@ -17,24 +17,39 @@
     .btn-withdraw:hover { background-color: #c82333; }
     .btn-edit { background-color: #ffc107; color: #333; padding: 6px 10px; width: auto; font-size: 0.8em; }
     .btn-edit:hover { background-color: #e0a800; }
+    .btn-filter { background-color: #17a2b8; width: 48%; display: inline-block; }
+    .btn-filter:hover { background-color: #138496; }
+    .btn-reset { background-color: #6c757d; width: 48%; display: inline-block; }
+    .btn-reset:hover { background-color: #5a6268; }
     .balance-card { background: #e9ecef; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.1em; font-weight: bold; margin: 10px 0; }
     
     /* Responsive Table Container */
     .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 450px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 550px; }
     th, td { padding: 8px; border: 1px solid #ddd; text-align: left; font-size: 0.85em; word-break: break-word; }
     th { background-color: #f8f9fa; color: #333; }
+    tfoot tr { background-color: #e9ecef; font-weight: bold; }
     
+    /* Pagination Styling */
+    .pagination-container { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+    .pagination-container button { width: auto; padding: 8px 15px; margin: 0; font-size: 0.9em; }
+    .pagination-container button:disabled { background-color: #cccccc; cursor: not-allowed; }
+    #page-info { font-size: 0.9em; font-weight: bold; color: #555; }
+
     .hidden { display: none; }
     .logout-btn { background-color: #6c757d; width: auto; padding: 6px 12px; float: right; font-size: 0.9em; }
     .admin-section { border: 2px dashed #007bff; background-color: #eef6ff; }
+    .filter-container { background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
+    .date-inputs { display: flex; gap: 10px; flex-wrap: wrap; }
+    .date-inputs div { flex: 1; min-width: 140px; }
+    .date-inputs label { font-size: 0.85em; font-weight: bold; color: #555; }
   </style>
 </head>
 <body>
 
   <!-- LOGIN FORM -->
   <div id="login-box" class="box">
-    <h3>System Login (Updeted)</h3>
+    <h3>System Login (Updated)</h3>
     <input type="email" id="login-email" placeholder="Email Address">
     <input type="password" id="login-password" placeholder="Password">
     <button onclick="loginUser()">Login</button>
@@ -81,6 +96,10 @@
           Current Balance: <span id="current-balance" style="color:#28a745;">0</span> BDT
         </div>
 
+        <!-- Custom Date Selection Field -->
+        <label for="txn-date" style="font-size: 0.85em; font-weight: bold; color: #555;">Transaction Date & Time:</label>
+        <input type="datetime-local" id="txn-date">
+
         <input type="number" id="txn-amount" placeholder="Amount (e.g., 500)">
         <input type="text" id="txn-note" placeholder="Remarks / Note (e.g., Cash Deposit)">
 
@@ -89,13 +108,33 @@
           <button class="btn-withdraw" onclick="handleTransaction('withdraw')">খরচ(-)</button>
         </div>
 
-        <h4>Collection History</h4>
+        <h4>Collection History & Report</h4>
+        
+        <!-- DATE RANGE FILTER -->
+        <div class="filter-container">
+          <div class="date-inputs">
+            <div>
+              <label for="filter-start-date">From Date:</label>
+              <input type="date" id="filter-start-date">
+            </div>
+            <div>
+              <label for="filter-end-date">To Date:</label>
+              <input type="date" id="filter-end-date">
+            </div>
+          </div>
+          <div style="margin-top: 5px;">
+            <button class="btn-filter" onclick="applyDateFilter()">Filter Report</button>
+            <button class="btn-reset" onclick="resetDateFilter()">Reset</button>
+          </div>
+        </div>
+
         <div class="table-container">
           <table>
             <thead>
               <tr>
                 <th>Date</th>
                 <th>Amount</th>
+                <th>Balance</th>
                 <th>Remarks</th>
                 <th>Action</th>
               </tr>
@@ -103,8 +142,19 @@
             <tbody id="history-body">
               <!-- Dynamic rows -->
             </tbody>
+            <tfoot id="history-footer">
+              <!-- Subtotal calculations -->
+            </tfoot>
           </table>
         </div>
+
+        <!-- PAGINATION CONTROLS -->
+        <div class="pagination-container">
+          <button id="prev-btn" onclick="changePage(-1)">Previous</button>
+          <span id="page-info">Page 1 of 1</span>
+          <button id="next-btn" onclick="changePage(1)">Next</button>
+        </div>
+
       </div>
     </div>
   </div>
@@ -134,6 +184,18 @@
     let currentRole = "staff";
     let currentUser = null;
 
+    // Pagination Variables
+    let allFilteredTransactions = [];
+    let currentPage = 1;
+    const rowsPerPage = 5;
+
+    // Helper: Set input to current local datetime
+    function setDefaultTxnDate() {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      document.getElementById("txn-date").value = now.toISOString().slice(0, 16);
+    }
+
     // Listen to Auth State
     onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -145,7 +207,6 @@
           currentRole = snapshot.val().role || "staff";
           showDashboard(user.email, currentRole);
         } else {
-          // If first system user ever logs in/registers, make Admin
           const usersRef = ref(db, 'users');
           const allUsersSnap = await get(usersRef);
 
@@ -204,13 +265,11 @@
       }
 
       try {
-        // Create user via secondary auth app instance to avoid logging out the current admin
         const tempApp = initializeApp(firebaseConfig, "SecondaryApp");
         const tempAuth = getAuth(tempApp);
         const userCredential = await createUserWithEmailAndPassword(tempAuth, email, password);
         const newUser = userCredential.user;
 
-        // Store User Role in Database
         await set(ref(db, 'users/' + newUser.uid), {
           email: email,
           role: role,
@@ -221,7 +280,6 @@
         document.getElementById("reg-email").value = "";
         document.getElementById("reg-password").value = "";
         
-        // Cleanup temp app
         signOut(tempAuth);
       } catch (e) {
         alert("Error creating user: " + e.message);
@@ -249,6 +307,7 @@
       }
 
       loadCustomerList();
+      setDefaultTxnDate();
     }
 
     // 3. Add New Customer
@@ -307,12 +366,17 @@
       }
 
       detailsDiv.style.display = "block";
+      setDefaultTxnDate();
       
       const snapshot = await get(ref(db, 'customers/' + customerId));
       if (snapshot.exists()) {
-        document.getElementById("current-balance").innerText = snapshot.val().balance || 0;
+        const bal = snapshot.val().balance || 0;
+        document.getElementById("current-balance").innerHTML = bal < 0 
+          ? `<span style="color:red;">${bal} BDT (Loan)</span>` 
+          : `<span style="color:#28a745;">${bal} BDT</span>`;
       }
 
+      currentPage = 1;
       loadHistory(customerId);
     };
 
@@ -321,21 +385,19 @@
       const customerId = document.getElementById("customer-select").value;
       const amount = parseFloat(document.getElementById("txn-amount").value);
       const note = document.getElementById("txn-note").value.trim();
+      const customDateVal = document.getElementById("txn-date").value;
 
       if (!amount || amount <= 0) {
         alert("Please enter a valid amount!");
         return;
       }
 
+      const timestamp = customDateVal ? new Date(customDateVal).getTime() : Date.now();
+
       try {
         const custRef = ref(db, 'customers/' + customerId);
         const custSnapshot = await get(custRef);
         let currentBalance = custSnapshot.val().balance || 0;
-
-        if (type === 'withdraw' && currentBalance < amount) {
-          alert("Insufficient balance!");
-          return;
-        }
 
         let newBalance = (type === 'deposit') ? currentBalance + amount : currentBalance - amount;
 
@@ -348,26 +410,52 @@
           type: type,
           amount: amount,
           note: note || (type === 'deposit' ? 'Deposit' : 'Withdrawal'),
-          timestamp: Date.now()
+          timestamp: timestamp
         });
 
         alert("Transaction completed successfully!");
         document.getElementById("txn-amount").value = "";
         document.getElementById("txn-note").value = "";
+        setDefaultTxnDate();
         loadCustomerData();
       } catch (e) {
         alert("Error: " + e.message);
       }
     };
 
-    // 7. Load History & Restrict Edit to Admin
+    // Filter functions
+    window.applyDateFilter = () => {
+      const customerId = document.getElementById("customer-select").value;
+      if (customerId) {
+        currentPage = 1; // Reset to page 1 on new filter
+        loadHistory(customerId);
+      }
+    };
+
+    window.resetDateFilter = () => {
+      document.getElementById("filter-start-date").value = "";
+      document.getElementById("filter-end-date").value = "";
+      const customerId = document.getElementById("customer-select").value;
+      if (customerId) {
+        currentPage = 1; // Reset to page 1 on reset
+        loadHistory(customerId);
+      }
+    };
+
+    // Pagination Controls
+    window.changePage = (direction) => {
+      currentPage += direction;
+      renderTablePage();
+    };
+
+    // 7. Load History & Filter Transactions
     async function loadHistory(customerId) {
       const historyBody = document.getElementById("history-body");
-      historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>`;
+      const historyFooter = document.getElementById("history-footer");
+      historyBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Loading...</td></tr>`;
+      historyFooter.innerHTML = "";
 
       const snapshot = await get(ref(db, 'ledger_history'));
-      historyBody.innerHTML = "";
-
       let transactions = [];
       if (snapshot.exists()) {
         snapshot.forEach((childSnapshot) => {
@@ -379,20 +467,86 @@
         });
       }
 
+      // Sort chronological (Oldest to Newest) to calculate running balance accurately
+      transactions.sort((a, b) => a.timestamp - b.timestamp);
+
+      let runningBalance = 0;
+      transactions.forEach(data => {
+        if (data.type === 'deposit') {
+          runningBalance += data.amount;
+        } else {
+          runningBalance -= data.amount;
+        }
+        data.runningBalance = runningBalance;
+      });
+
+      // Sort Newest First
       transactions.sort((a, b) => b.timestamp - a.timestamp);
 
-      if (transactions.length > 0) {
-        transactions.forEach(data => {
+      // Get Date Filter Values
+      const startDateVal = document.getElementById("filter-start-date").value;
+      const endDateVal = document.getElementById("filter-end-date").value;
+
+      allFilteredTransactions = transactions.filter(data => {
+        if (!startDateVal && !endDateVal) return true;
+        const txnDate = new Date(data.timestamp);
+        
+        if (startDateVal) {
+          const startDate = new Date(startDateVal + "T00:00:00");
+          if (txnDate < startDate) return false;
+        }
+        if (endDateVal) {
+          const endDate = new Date(endDateVal + "T23:59:59");
+          if (txnDate > endDate) return false;
+        }
+        return true;
+      });
+
+      renderTablePage();
+    }
+
+    // Render Table Page & Footer Summaries
+    function renderTablePage() {
+      const historyBody = document.getElementById("history-body");
+      const historyFooter = document.getElementById("history-footer");
+      historyBody.innerHTML = "";
+
+      let totalDeposit = 0;
+      let totalWithdrawal = 0;
+
+      // Calculate totals for all filtered data (regardless of current page)
+      allFilteredTransactions.forEach(data => {
+        if (data.type === 'deposit') {
+          totalDeposit += data.amount;
+        } else {
+          totalWithdrawal += data.amount;
+        }
+      });
+
+      if (allFilteredTransactions.length > 0) {
+        // Pagination slicing
+        const totalPages = Math.ceil(allFilteredTransactions.length / rowsPerPage);
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        const startIdx = (currentPage - 1) * rowsPerPage;
+        const paginatedItems = allFilteredTransactions.slice(startIdx, startIdx + rowsPerPage);
+
+        paginatedItems.forEach(data => {
           const tr = document.createElement("tr");
           
           const dateObj = new Date(data.timestamp);
           const day = String(dateObj.getDate()).padStart(2, '0');
           const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          const formattedDate = `${day}-${months[dateObj.getMonth()]}-${dateObj.getFullYear()} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          const formattedDate = `${day}-${months[dateObj.getMonth()]} ${dateObj.getFullYear()} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
           const typeLabel = data.type === 'deposit' ? 'Deposit' : 'Withdrawal';
           const amountColor = data.type === 'deposit' ? 'green' : 'red';
           const prefix = data.type === 'deposit' ? '+' : '-';
+
+          let balanceDisplayHtml = data.runningBalance < 0 
+            ? `<span style="color: red; font-weight: bold;">${data.runningBalance} BDT (Loan)</span>` 
+            : `<span style="color: #333; font-weight: bold;">${data.runningBalance} BDT</span>`;
 
           const actionBtnHtml = (currentRole === "admin") 
             ? `<button class="btn-edit" onclick="editTransaction('${data.id}', '${data.note}', ${data.amount})">Edit</button>` 
@@ -401,13 +555,41 @@
           tr.innerHTML = `
             <td>${formattedDate}</td>
             <td style="color: ${amountColor}; font-weight: bold;">${prefix}${data.amount} BDT (${typeLabel})</td>
+            <td>${balanceDisplayHtml}</td>
             <td>${data.note}</td>
             <td style="text-align: center;">${actionBtnHtml}</td>
           `;
           historyBody.appendChild(tr);
         });
+
+        // Update Pagination Controls UI
+        document.getElementById("page-info").innerText = `Page ${currentPage} of ${totalPages}`;
+        document.getElementById("prev-btn").disabled = currentPage === 1;
+        document.getElementById("next-btn").disabled = currentPage === totalPages;
+
+        // Add Sub Total Footer Row
+        const netTotal = totalDeposit - totalWithdrawal;
+        let netTotalDisplayHtml = netTotal < 0 
+          ? `<span style="color: red;">Net Balance: ${netTotal} BDT (Loan)</span>` 
+          : `<span style="color: #28a745;">Net Balance: ${netTotal} BDT</span>`;
+
+        historyFooter.innerHTML = `
+          <tr>
+            <td>Sub Total</td>
+            <td>
+              <span style="color:green;">+${totalDeposit}</span> / 
+              <span style="color:red;">-${totalWithdrawal}</span>
+            </td>
+            <td colspan="3" style="font-size: 1.05em;">
+              ${netTotalDisplayHtml}
+            </td>
+          </tr>
+        `;
       } else {
-        historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No transaction history found.</td></tr>`;
+        historyBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No transaction history found for selected criteria.</td></tr>`;
+        document.getElementById("page-info").innerText = `Page 1 of 1`;
+        document.getElementById("prev-btn").disabled = true;
+        document.getElementById("next-btn").disabled = true;
       }
     }
 
