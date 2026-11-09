@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Ledger with Admin Role Control</title>
+  <title>Customer Ledger with Email Auth & Role Control</title>
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 10px; max-width: 800px; margin: auto; background-color: #f4f6f9; box-sizing: border-box; }
     .box { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-x: auto; }
@@ -19,7 +19,7 @@
     .btn-edit:hover { background-color: #e0a800; }
     .balance-card { background: #e9ecef; padding: 12px; border-radius: 6px; text-align: center; font-size: 1.1em; font-weight: bold; margin: 10px 0; }
     
-    /* Table Styling with Horizontal Scroll for Mobile */
+    /* Responsive Table Container */
     .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 450px; }
     th, td { padding: 8px; border: 1px solid #ddd; text-align: left; font-size: 0.85em; word-break: break-word; }
@@ -34,9 +34,9 @@
 
   <!-- LOGIN FORM -->
   <div id="login-box" class="box">
-    <h3>System Login</h3>
-    <input type="text" id="login-phone" placeholder="Mobile Number">
-    <input type="password" id="login-password" placeholder="Password / PIN">
+    <h3>System Login (Updeted)</h3>
+    <input type="email" id="login-email" placeholder="Email Address">
+    <input type="password" id="login-password" placeholder="Password">
     <button onclick="loginUser()">Login</button>
   </div>
 
@@ -45,14 +45,14 @@
     <div class="box">
       <button class="logout-btn" onclick="logoutUser()">Logout</button>
       <h2>Personal Account Ledger</h2>
-      <p>Logged in User: <span id="user-phone-display" style="font-weight: bold;"></span> (<span id="user-role-display" style="color:#007bff; font-weight:bold;"></span>)</p>
+      <p>Logged in User: <span id="user-email-display" style="font-weight: bold;"></span> (<span id="user-role-display" style="color:#007bff; font-weight:bold;"></span>)</p>
     </div>
 
     <!-- ADMIN ONLY SECTION: CREATE NEW USER -->
     <div id="admin-create-box" class="box admin-section hidden">
       <h3>➕ Add New User (Admin Only)</h3>
-      <input type="text" id="reg-phone" placeholder="User Mobile Number">
-      <input type="password" id="reg-password" placeholder="Set User Password">
+      <input type="email" id="reg-email" placeholder="User Email Address">
+      <input type="password" id="reg-password" placeholder="Set Password (min 6 chars)">
       <select id="reg-role">
         <option value="staff">Staff (Cannot edit history or create users)</option>
         <option value="admin">Admin (Full access)</option>
@@ -112,6 +112,7 @@
   <!-- Firebase SDK Modules -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getDatabase, ref, set, get, push, update, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // Firebase Configuration
@@ -127,117 +128,118 @@
     };
 
     const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
     const db = getDatabase(app);
 
-    let currentRole = "staff"; // Default role
+    let currentRole = "staff";
+    let currentUser = null;
 
-    window.onload = () => {
-      const loggedUser = sessionStorage.getItem("loggedInUser");
-      const userRole = sessionStorage.getItem("userRole");
-      if (loggedUser) {
-        currentRole = userRole;
-        showDashboard(loggedUser, userRole);
+    // Listen to Auth State
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        currentUser = user;
+        const userRef = ref(db, 'users/' + user.uid);
+        const snapshot = await get(userRef);
+
+        if (snapshot.exists()) {
+          currentRole = snapshot.val().role || "staff";
+          showDashboard(user.email, currentRole);
+        } else {
+          // If first system user ever logs in/registers, make Admin
+          const usersRef = ref(db, 'users');
+          const allUsersSnap = await get(usersRef);
+
+          let assignedRole = allUsersSnap.exists() ? "staff" : "admin";
+          await set(userRef, {
+            email: user.email,
+            role: assignedRole,
+            createdAt: Date.now()
+          });
+          currentRole = assignedRole;
+          showDashboard(user.email, currentRole);
+        }
+      } else {
+        currentUser = null;
+        document.getElementById("dashboard").classList.add("hidden");
+        document.getElementById("login-box").classList.remove("hidden");
       }
-    };
+    });
 
-    // ১. লগইন প্রসেস
+    // ১. লগইন প্রসেস (Email & Password)
     window.loginUser = async () => {
-      const phone = document.getElementById("login-phone").value.trim();
+      const email = document.getElementById("login-email").value.trim();
       const password = document.getElementById("login-password").value.trim();
 
-      if (!phone || !password) {
-        alert("Please enter both phone number and password!");
+      if (!email || !password) {
+        alert("Please enter both email address and password!");
         return;
       }
 
       try {
-        const adminUsersRef = ref(db, 'admin_users');
-        const snapshot = await get(adminUsersRef);
-
-        if (!snapshot.exists()) {
-          const userRef = ref(db, 'admin_users/' + phone);
-          await set(userRef, {
-            phone: phone,
-            password: password,
-            role: "admin",
-            createdAt: Date.now()
-          });
-          sessionStorage.setItem("loggedInUser", phone);
-          sessionStorage.setItem("userRole", "admin");
-          currentRole = "admin";
-          alert("First Admin Created & Logged In!");
-          showDashboard(phone, "admin");
-          return;
-        }
-
-        const userRef = ref(db, 'admin_users/' + phone);
-        const userSnap = await get(userRef);
-
-        if (userSnap.exists() && userSnap.val().password === password) {
-          const role = userSnap.val().role || "admin";
-          sessionStorage.setItem("loggedInUser", phone);
-          sessionStorage.setItem("userRole", role);
-          currentRole = role;
-          showDashboard(phone, role);
-        } else {
-          alert("Invalid Phone Number or Password!");
-        }
+        await signInWithEmailAndPassword(auth, email, password);
       } catch (e) {
-        alert("Login error: " + e.message);
+        alert("Login Error: " + e.message);
       }
     };
 
-    // ২. শুধুমাত্র অ্যাডমিন নতুন ইউজার তৈরি করতে পারবে
+    // ২. অ্যাডমিন দ্বারা নতুন ইউজার রেজিস্টার প্রসেস
     window.registerUserByAdmin = async () => {
       if (currentRole !== "admin") {
         alert("Permission denied! Only Admin can create new users.");
         return;
       }
 
-      const phone = document.getElementById("reg-phone").value.trim();
+      const email = document.getElementById("reg-email").value.trim();
       const password = document.getElementById("reg-password").value.trim();
       const role = document.getElementById("reg-role").value;
 
-      if (!phone || !password) {
+      if (!email || !password) {
         alert("Please fill in all fields!");
         return;
       }
 
+      if (password.length < 6) {
+        alert("Password must be at least 6 characters!");
+        return;
+      }
+
       try {
-        const userRef = ref(db, 'admin_users/' + phone);
-        const snapshot = await get(userRef);
+        // Create user via secondary auth app instance to avoid logging out the current admin
+        const tempApp = initializeApp(firebaseConfig, "SecondaryApp");
+        const tempAuth = getAuth(tempApp);
+        const userCredential = await createUserWithEmailAndPassword(tempAuth, email, password);
+        const newUser = userCredential.user;
 
-        if (snapshot.exists()) {
-          alert("User with this phone number already exists!");
-          return;
-        }
-
-        await set(userRef, {
-          phone: phone,
-          password: password,
+        // Store User Role in Database
+        await set(ref(db, 'users/' + newUser.uid), {
+          email: email,
           role: role,
           createdAt: Date.now()
         });
 
-        alert(`New User (${role}) created successfully!`);
-        document.getElementById("reg-phone").value = "";
+        alert(`New User (${email}) with role [${role.toUpperCase()}] created successfully!`);
+        document.getElementById("reg-email").value = "";
         document.getElementById("reg-password").value = "";
+        
+        // Cleanup temp app
+        signOut(tempAuth);
       } catch (e) {
-        alert("Error: " + e.message);
+        alert("Error creating user: " + e.message);
       }
     };
 
     // Logout
     window.logoutUser = () => {
-      sessionStorage.clear();
-      document.getElementById("dashboard").classList.add("hidden");
-      document.getElementById("login-box").classList.remove("hidden");
+      signOut(auth).then(() => {
+        document.getElementById("dashboard").classList.add("hidden");
+        document.getElementById("login-box").classList.remove("hidden");
+      });
     };
 
-    function showDashboard(phone, role) {
+    function showDashboard(email, role) {
       document.getElementById("login-box").classList.add("hidden");
       document.getElementById("dashboard").classList.remove("hidden");
-      document.getElementById("user-phone-display").innerText = phone;
+      document.getElementById("user-email-display").innerText = email;
       document.getElementById("user-role-display").innerText = role.toUpperCase();
 
       if (role === "admin") {
@@ -249,7 +251,7 @@
       loadCustomerList();
     }
 
-    // 3. Create customer
+    // 3. Add New Customer
     window.addCustomer = async () => {
       const name = document.getElementById("customer-name").value.trim();
       const phone = document.getElementById("customer-phone").value.trim();
@@ -358,7 +360,7 @@
       }
     };
 
-    // 7. Load History & Restrict Edit Button to Admin Only
+    // 7. Load History & Restrict Edit to Admin
     async function loadHistory(customerId) {
       const historyBody = document.getElementById("history-body");
       historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>`;
@@ -405,15 +407,15 @@
           historyBody.appendChild(tr);
         });
       } else {
-        history,historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No transaction history found.</td></tr>`;
+        historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No transaction history found.</td></tr>`;
       }
     }
 
-    // 8. Edit Transaction (Admin Verification)
+    // 8. Edit Transaction (Admin Only)
     window.editTransaction = async (txnId, oldNote, oldAmount) => {
       if (currentRole !== "admin") {
         alert("Permission Denied! Only Admin can edit transactions.");
-      return;
+        return;
       }
 
       const newNote = prompt("Edit Remarks / Note:", oldNote);
