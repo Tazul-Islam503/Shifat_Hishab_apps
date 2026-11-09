@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Ledger with Admin Role Control</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 800px; margin: auto; background-color: #f4f6f9; }
+    .box { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    h2, h3 { color: #333; }
+    input, select, button { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
+    button { background-color: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    .btn-deposit { background-color: #28a745; }
+    .btn-deposit:hover { background-color: #218838; }
+    .btn-withdraw { background-color: #dc3545; }
+    .btn-withdraw:hover { background-color: #c82333; }
+    .btn-edit { background-color: #ffc107; color: #333; padding: 5px 10px; width: auto; font-size: 0.8em; }
+    .btn-edit:hover { background-color: #e0a800; }
+    .balance-card { background: #e9ecef; padding: 15px; border-radius: 6px; text-align: center; font-size: 1.2em; font-weight: bold; margin: 10px 0; }
+    
+    /* Table Styling */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+    th, td { padding: 10px; border: 1px solid #ddd; text-align: left; font-size: 0.9em; word-wrap: break-word; }
+    th { background-color: #f8f9fa; color: #333; }
+    
+    th:nth-child(1), td:nth-child(1) { width: 25%; } /* Date */
+    th:nth-child(2), td:nth-child(2) { width: 25%; } /* Amount */
+    th:nth-child(3), td:nth-child(3) { width: 35%; } /* Remarks */
+    th:nth-child(4), td:nth-child(4) { width: 15%; text-align: center; } /* Action */
+    
+    .hidden { display: none; }
+    .logout-btn { background-color: #6c757d; width: auto; padding: 5px 15px; float: right; }
+    .admin-section { border: 2px dashed #007bff; background-color: #eef6ff; }
+  </style>
+</head>
+<body>
+
+  <!-- LOGIN FORM -->
+  <div id="login-box" class="box">
+    <h3>System Login</h3>
+    <input type="text" id="login-phone" placeholder="Mobile Number">
+    <input type="password" id="login-password" placeholder="Password / PIN">
+    <button onclick="loginUser()">Login</button>
+  </div>
+
+  <!-- MAIN DASHBOARD -->
+  <div id="dashboard" class="hidden">
+    <div class="box">
+      <button class="logout-btn" onclick="logoutUser()">Logout</button>
+      <h2>Personal Account Ledger</h2>
+      <p>Logged in User: <span id="user-phone-display" style="font-weight: bold;"></span> (<span id="user-role-display" style="color:#007bff; font-weight:bold;"></span>)</p>
+    </div>
+
+    <!-- ADMIN ONLY SECTION: CREATE NEW USER -->
+    <div id="admin-create-box" class="box admin-section hidden">
+      <h3>➕ Add New User (Admin Only)</h3>
+      <input type="text" id="reg-phone" placeholder="User Mobile Number">
+      <input type="password" id="reg-password" placeholder="Set User Password">
+      <select id="reg-role">
+        <option value="staff">Staff (Cannot edit history or create users)</option>
+        <option value="admin">Admin (Full access)</option>
+      </select>
+      <button onclick="registerUserByAdmin()" style="background-color: #28a745;">Create User</button>
+    </div>
+
+    <!-- 1. Add New Customer Form -->
+    <div class="box">
+      <h3>Add New Account</h3>
+      <input type="text" id="customer-name" placeholder="Account Holder Name">
+      <input type="text" id="customer-phone" placeholder="Mobile Number">
+      <button onclick="addCustomer()">Save New Account Holder</button>
+    </div>
+
+    <!-- 2. Transaction & Account Management -->
+    <div class="box">
+      <h3>Perform Transaction</h3>
+      <label for="customer-select">Select Account Holder:</label>
+      <select id="customer-select" onchange="loadCustomerData()">
+        <option value="">-- Select Account --</option>
+      </select>
+
+      <div id="customer-details" style="display:none;">
+        <div class="balance-card">
+          Current Balance: <span id="current-balance" style="color:#28a745;">0</span> BDT
+        </div>
+
+        <input type="number" id="txn-amount" placeholder="Amount (e.g., 500)">
+        <input type="text" id="txn-note" placeholder="Remarks / Note (e.g., Cash Deposit)">
+
+        <div style="display: flex; gap: 10px;">
+          <button class="btn-deposit" onclick="handleTransaction('deposit')">Deposit (+)</button>
+          <button class="btn-withdraw" onclick="handleTransaction('withdraw')">Withdraw (-)</button>
+        </div>
+
+        <h4>Collection History</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Remarks</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK Modules -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, get, push, update, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyAgEiJJHwtdhd4QzZRonoyHEwmz1vjYN-U",
+      authDomain: "shifat30373transaction.firebaseapp.com",
+      databaseURL: "https://shifat30373transaction-default-rtdb.firebaseio.com",
+      projectId: "shifat30373transaction",
+      storageBucket: "shifat30373transaction.firebasestorage.app",
+      messagingSenderId: "38889296928",
+      appId: "1:38889296928:web:427556520b470b71ccd845",
+      measurementId: "G-ZDZ471PKXE"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let currentRole = "staff"; // Default role
+
+    window.onload = () => {
+      const loggedUser = sessionStorage.getItem("loggedInUser");
+      const userRole = sessionStorage.getItem("userRole");
+      if (loggedUser) {
+        currentRole = userRole;
+        showDashboard(loggedUser, userRole);
+      }
+    };
+
+    // ১. লগইন প্রসেস
+    window.loginUser = async () => {
+      const phone = document.getElementById("login-phone").value.trim();
+      const password = document.getElementById("login-password").value.trim();
+
+      if (!phone || !password) {
+        alert("Please enter both phone number and password!");
+        return;
+      }
+
+      try {
+        const adminUsersRef = ref(db, 'admin_users');
+        const snapshot = await get(adminUsersRef);
+
+        // প্রথমবার সিস্টেম শুরু করার সময় যদি কোনো ইউজার ডাটাবেসে না থাকে, প্রথমবার লগইনকারী অ্যাডমিন হয়ে যাবে
+        if (!snapshot.exists()) {
+          const userRef = ref(db, 'admin_users/' + phone);
+          await set(userRef, {
+            phone: phone,
+            password: password,
+            role: "admin",
+            createdAt: Date.now()
+          });
+          sessionStorage.setItem("loggedInUser", phone);
+          sessionStorage.setItem("userRole", "admin");
+          currentRole = "admin";
+          alert("First Admin Created & Logged In!");
+          showDashboard(phone, "admin");
+          return;
+        }
+
+        const userRef = ref(db, 'admin_users/' + phone);
+        const userSnap = await get(userRef);
+
+        if (userSnap.exists() && userSnap.val().password === password) {
+          const role = userSnap.val().role || "admin";
+          sessionStorage.setItem("loggedInUser", phone);
+          sessionStorage.setItem("userRole", role);
+          currentRole = role;
+          showDashboard(phone, role);
+        } else {
+          alert("Invalid Phone Number or Password!");
+        }
+      } catch (e) {
+        alert("Login error: " + e.message);
+      }
+    };
+
+    // ২. শুধুমাত্র অ্যাডমিন অন্য নতুন ইউজার তৈরি করতে পারবে
+    window.registerUserByAdmin = async () => {
+      if (currentRole !== "admin") {
+        alert("Permission denied! Only Admin can create new users.");
+        return;
+      }
+
+      const phone = document.getElementById("reg-phone").value.trim();
+      const password = document.getElementById("reg-password").value.trim();
+      const role = document.getElementById("reg-role").value;
+
+      if (!phone || !password) {
+        alert("Please fill in all fields!");
+        return;
+      }
+
+      try {
+        const userRef = ref(db, 'admin_users/' + phone);
+        const snapshot = await get(userRef);
+
+        if (snapshot.exists()) {
+          alert("User with this phone number already exists!");
+          return;
+        }
+
+        await set(userRef, {
+          phone: phone,
+          password: password,
+          role: role,
+          createdAt: Date.now()
+        });
+
+        alert(`New User (${role}) created successfully!`);
+        document.getElementById("reg-phone").value = "";
+        document.getElementById("reg-password").value = "";
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    };
+
+    // Logout
+    window.logoutUser = () => {
+      sessionStorage.clear();
+      document.getElementById("dashboard").classList.add("hidden");
+      document.getElementById("login-box").classList.remove("hidden");
+    };
+
+    function showDashboard(phone, role) {
+      document.getElementById("login-box").classList.add("hidden");
+      document.getElementById("dashboard").classList.remove("hidden");
+      document.getElementById("user-phone-display").innerText = phone;
+      document.getElementById("user-role-display").innerText = role.toUpperCase();
+
+      // শুধুমাত্র Admin হলে নতুন ইউজার ক্রিয়েট করার সেকশন দেখাবে
+      if (role === "admin") {
+        document.getElementById("admin-create-box").classList.remove("hidden");
+      } else {
+        document.getElementById("admin-create-box").classList.add("hidden");
+      }
+
+      loadCustomerList();
+    }
+
+    // 3. Create customer
+    window.addCustomer = async () => {
+      const name = document.getElementById("customer-name").value.trim();
+      const phone = document.getElementById("customer-phone").value.trim();
+
+      if (!name || !phone) {
+        alert("Please provide both name and mobile number!");
+        return;
+      }
+
+      try {
+        const newCustomerRef = push(ref(db, 'customers'));
+        await set(newCustomerRef, {
+          name: name,
+          phone: phone,
+          balance: 0,
+          createdAt: Date.now()
+        });
+        alert("Customer added successfully!");
+        document.getElementById("customer-name").value = "";
+        document.getElementById("customer-phone").value = "";
+        loadCustomerList();
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    };
+
+    // 4. Load Customer List
+    async function loadCustomerList() {
+      const select = document.getElementById("customer-select");
+      select.innerHTML = '<option value="">-- Select Customer --</option>';
+      
+      const snapshot = await get(child(ref(db), 'customers'));
+      if (snapshot.exists()) {
+        snapshot.forEach((childSnapshot) => {
+          const customerId = childSnapshot.key;
+          const data = childSnapshot.val();
+          const option = document.createElement("option");
+          option.value = customerId;
+          option.textContent = `${data.name} (${data.phone})`;
+          select.appendChild(option);
+        });
+      }
+    }
+
+    // 5. Load Customer Data
+    window.loadCustomerData = async () => {
+      const customerId = document.getElementById("customer-select").value;
+      const detailsDiv = document.getElementById("customer-details");
+
+      if (!customerId) {
+        detailsDiv.style.display = "none";
+        return;
+      }
+
+      detailsDiv.style.display = "block";
+      
+      const snapshot = await get(ref(db, 'customers/' + customerId));
+      if (snapshot.exists()) {
+        document.getElementById("current-balance").innerText = snapshot.val().balance || 0;
+      }
+
+      loadHistory(customerId);
+    };
+
+    // 6. Handle Transactions
+    window.handleTransaction = async (type) => {
+      const customerId = document.getElementById("customer-select").value;
+      const amount = parseFloat(document.getElementById("txn-amount").value);
+      const note = document.getElementById("txn-note").value.trim();
+
+      if (!amount || amount <= 0) {
+        alert("Please enter a valid amount!");
+        return;
+      }
+
+      try {
+        const custRef = ref(db, 'customers/' + customerId);
+        const custSnapshot = await get(custRef);
+        let currentBalance = custSnapshot.val().balance || 0;
+
+        if (type === 'withdraw' && currentBalance < amount) {
+          alert("Insufficient balance!");
+          return;
+        }
+
+        let newBalance = (type === 'deposit') ? currentBalance + amount : currentBalance - amount;
+
+        await update(custRef, { balance: newBalance });
+
+        const historyRef = ref(db, 'ledger_history');
+        const newHistoryRef = push(historyRef);
+        await set(newHistoryRef, {
+          customerId: customerId,
+          type: type,
+          amount: amount,
+          note: note || (type === 'deposit' ? 'Deposit' : 'Withdrawal'),
+          timestamp: Date.now()
+        });
+
+        alert("Transaction completed successfully!");
+        document.getElementById("txn-amount").value = "";
+        document.getElementById("txn-note").value = "";
+        loadCustomerData();
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    };
+
+    // 7. Load History & Restrict Edit Button to Admin Only
+    async function loadHistory(customerId) {
+      const historyBody = document.getElementById("history-body");
+      historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>`;
+
+      const snapshot = await get(ref(db, 'ledger_history'));
+      historyBody.innerHTML = "";
+
+      let transactions = [];
+      if (snapshot.exists()) {
+        snapshot.forEach((childSnapshot) => {
+          let data = childSnapshot.val();
+          data.id = childSnapshot.key;
+          if (data.customerId === customerId) {
+            transactions.push(data);
+          }
+        });
+      }
+
+      transactions.sort((a, b) => b.timestamp - a.timestamp);
+
+      if (transactions.length > 0) {
+        transactions.forEach(data => {
+          const tr = document.createElement("tr");
+          
+          const dateObj = new Date(data.timestamp);
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const formattedDate = `${day}-${months[dateObj.getMonth()]}-${dateObj.getFullYear()} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+          const typeLabel = data.type === 'deposit' ? 'Deposit' : 'Withdrawal';
+          const amountColor = data.type === 'deposit' ? 'green' : 'red';
+          const prefix = data.type === 'deposit' ? '+' : '-';
+
+          // এডিট বাটন শুধুমাত্র Admin দেখতে পাবে
+          const actionBtnHtml = (currentRole === "admin") 
+            ? `<button class="btn-edit" onclick="editTransaction('${data.id}', '${data.note}', ${data.amount})">Edit</button>` 
+            : `<span style="color:#aaa; font-size:0.8em;">No Access</span>`;
+
+          tr.innerHTML = `
+            <td>${formattedDate}</td>
+            <td style="color: ${amountColor}; font-weight: bold;">${prefix}${data.amount} BDT (${typeLabel})</td>
+            <td>${data.note}</td>
+            <td style="text-align: center;">${actionBtnHtml}</td>
+          `;
+          historyBody.appendChild(tr);
+        });
+      } else {
+        historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">No transaction history found.</td></tr>`;
+      }
+    }
+
+    // 8. Edit Transaction (Admin Verification)
+    window.editTransaction = async (txnId, oldNote, oldAmount) => {
+      if (currentRole !== "admin") {
+        alert("Permission Denied! Only Admin can edit transactions.");
+        return;
+      }
+
+      const newNote = prompt("Edit Remarks / Note:", oldNote);
+      if (newNote === null) return;
+
+      const newAmountInput = prompt("Edit Amount:", oldAmount);
+      if (newAmountInput === null) return;
+
+      const newAmount = parseFloat(newAmountInput);
+      if (isNaN(newAmount) || newAmount <= 0) {
+        alert("Invalid amount!");
+        return;
+      }
+
+      try {
+        const txnRef = ref(db, 'ledger_history/' + txnId);
+        await update(txnRef, {
+          note: newNote,
+          amount: newAmount
+        });
+        alert("Transaction updated successfully!");
+        loadCustomerData();
+      } catch (e) {
+        alert("Update error: " + e.message);
+      }
+    };
+  </script>
+</body>
+</html>
