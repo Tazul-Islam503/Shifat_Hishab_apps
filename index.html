@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Personal Transaction Ledger</title>
+  <title>Personal Transaction Ledger (Real-time)</title>
   <style>
     :root {
       --primary: #007bff;
@@ -39,7 +39,7 @@
       overflow-x: auto;
     }
 
-    /* Accordion / Collapsible Styling for Mobile Friendly */
+    /* মোবাইল ফ্রেন্ডলি একর্ডিয়ন বা কলাপসিবল সেকশন ডিজাইন */
     .section-header {
       background-color: #e9ecef;
       color: #333;
@@ -55,22 +55,11 @@
       border: 1px solid var(--border-color);
       user-select: none;
     }
-    .section-header:hover {
-      background-color: #dde2e6;
-    }
-    .section-content {
-      display: none;
-      padding-top: 5px;
-    }
-    .section-content.active {
-      display: block;
-    }
+    .section-header:hover { background-color: #dde2e6; }
+    .section-content { display: none; padding-top: 5px; }
+    .section-content.active { display: block; }
 
-    h2, h3 {
-      color: var(--text-color);
-      font-size: 1.3em;
-      margin-top: 0;
-    }
+    h2, h3 { color: var(--text-color); font-size: 1.3em; margin-top: 0; }
 
     input, select, button {
       width: 100%;
@@ -142,7 +131,7 @@
 </head>
 <body>
 
-  <!-- LOGIN FORM -->
+  <!-- লগইন ফর্ম -->
   <div id="login-box" class="box">
     <h3>System Login</h3>
     <input type="email" id="login-email" placeholder="Email Address">
@@ -150,7 +139,7 @@
     <button onclick="loginUser()">Login</button>
   </div>
 
-  <!-- MAIN DASHBOARD -->
+  <!-- মেইন ড্যাশবোর্ড -->
   <div id="dashboard" class="hidden">
     <div class="box">
       <button class="logout-btn" onclick="logoutUser()">Logout</button>
@@ -158,7 +147,7 @@
       <p>Logged in User: <span id="user-email-display" style="font-weight: bold;"></span> (<span id="user-role-display" style="color:var(--primary); font-weight:bold;"></span>)</p>
     </div>
 
-    <!-- ADMIN ONLY SECTION: CREATE NEW USER -->
+    <!-- শুধুমাত্র এডমিনের জন্য: নতুন ইউজার তৈরি করার সেকশন -->
     <div id="admin-create-container" class="hidden">
       <div class="section-header" onclick="toggleSection('admin-create-content')">
         <span>➕ Add New User (Admin Only)</span> <span>▼</span>
@@ -174,7 +163,7 @@
       </div>
     </div>
 
-    <!-- 1. Add New Customer Form -->
+    <!-- ১. নতুন অ্যাকাউন্ট হোল্ডার যোগ করার ফর্ম -->
     <div>
       <div class="section-header" onclick="toggleSection('add-customer-content')">
         <span>👤 Add New Account</span> <span>▼</span>
@@ -186,7 +175,7 @@
       </div>
     </div>
 
-    <!-- 2. Transaction & Account Management -->
+    <!-- ২. লেনদেন (জমা/খরচ) করার সেকশন -->
     <div>
       <div class="section-header" onclick="toggleSection('transaction-content')">
         <span>💳 Perform Transaction</span> <span>▼</span>
@@ -216,14 +205,14 @@
       </div>
     </div>
 
-    <!-- 3. Transaction History & Report Section -->
+    <!-- ৩. ট্রানজেকশন হিস্টোরি এবং রিপোর্ট সেকশন -->
     <div id="history-section-container" style="display:none;">
       <div class="section-header" onclick="toggleSection('history-content')">
         <span>📊 Transaction History & Report</span> <span>▼</span>
       </div>
       <div id="history-content" class="box section-content active">
         
-        <!-- DATE RANGE FILTER -->
+        <!-- তারিখ ফিল্টার করার বক্স -->
         <div class="filter-container">
           <div class="date-inputs">
             <div>
@@ -253,15 +242,15 @@
               </tr>
             </thead>
             <tbody id="history-body">
-              <!-- Dynamic rows -->
+              <!-- ডাইনামিক ডাটা এখানে লোড হবে -->
             </tbody>
             <tfoot id="history-footer">
-              <!-- Subtotal calculations -->
+              <!-- মোট হিসাব বা সাব-টোটাল এখানে দেখাবে -->
             </tfoot>
           </table>
         </div>
 
-        <!-- PAGINATION CONTROLS -->
+        <!-- পেজিনেশন বাটন (Previous / Next) -->
         <div class="pagination-container" id="pagination-wrapper">
           <button id="prev-btn" onclick="changePage(-1)">Previous</button>
           <span id="page-info">Page 1 of 1</span>
@@ -273,12 +262,13 @@
 
   </div>
 
-  <!-- Firebase SDK Modules -->
+  <!-- Firebase SDK মডিউল ইম্পোর্ট (রিয়েল-টাইম আপডেটের জন্য onValue যুক্ত করা হয়েছে) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getDatabase, ref, set, get, push, update, remove, child } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { getDatabase, ref, set, get, push, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
+    // ফায়ারবেস কনফিগারেশন ডাটা
     const firebaseConfig = {
       apiKey: "AIzaSyAgEiJJHwtdhd4QzZRonoyHEwmz1vjYN-U",
       authDomain: "shifat30373transaction.firebaseapp.com",
@@ -290,6 +280,7 @@
       measurementId: "G-ZDZ471PKXE"
     };
 
+    // ফায়ারবেস অ্যাপ, অথেনটিকেশন এবং ডাটাবেস ইনিশিয়ালাইজ করা
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
@@ -297,22 +288,27 @@
     let currentRole = "staff";
     let currentUser = null;
 
+    // পেজিনেশন ও রিয়েল-টাইম লিসেনার ভেরিয়েবল
     let allFilteredTransactions = [];
     let currentPage = 1;
     const rowsPerPage = 5;
+    let unsubscribeBalance = null; // রিয়েল-টাইম ব্যালেন্স লিসেনার বন্ধ করার জন্য
+    let unsubscribeHistory = null; // রিয়েল-টাইম হিস্টোরি লিসেনার বন্ধ করার জন্য
 
-    // Mobile Section Toggle Function
+    // [ফাংশন ১]: মোবাইলে সেকশনগুলো ক্লিক করে খোলা বা বন্ধ করার ফাংশন
     window.toggleSection = (contentId) => {
       const content = document.getElementById(contentId);
       content.classList.toggle('active');
     };
 
+    // [ফাংশন ২]: লেনদেনের ইনপুট বক্সে বর্তমান লোকাল তারিখ ও সময় সেট করার ফাংশন
     function setDefaultTxnDate() {
       const now = new Date();
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       document.getElementById("txn-date").value = now.toISOString().slice(0, 16);
     }
 
+    // [ফাংশন ৩]: ইউজার লগইন অবস্থায় আছে কিনা তা সার্বক্ষণিক চেক করার ফাংশন
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         currentUser = user;
@@ -323,6 +319,7 @@
           currentRole = snapshot.val().role || "staff";
           showDashboard(user.email, currentRole);
         } else {
+          // ডাটাবেসে প্রথম ইউজার হলে তাকে admin বানানো হবে, পরের জনকে staff
           const usersRef = ref(db, 'users');
           const allUsersSnap = await get(usersRef);
 
@@ -342,6 +339,7 @@
       }
     });
 
+    // [ফাংশন ৪]: ইমেইল ও পাসওয়ার্ড দিয়ে সিস্টেমে লগইন করার ফাংশন
     window.loginUser = async () => {
       const email = document.getElementById("login-email").value.trim();
       const password = document.getElementById("login-password").value.trim();
@@ -358,6 +356,7 @@
       }
     };
 
+    // [ফাংশন ৫]: শুধুমাত্র এডমিন দ্বারা নতুন স্টাফ বা এডমিন অ্যাকাউন্ট তৈরি করার ফাংশন
     window.registerUserByAdmin = async () => {
       if (currentRole !== "admin") {
         alert("Permission denied! Only Admin can create new users.");
@@ -379,6 +378,7 @@
       }
 
       try {
+        // বর্তমান এডমিনকে লগআউট না করিয়ে নতুন ইউজার বানানোর জন্য সেকেন্ডারি অ্যাপ ব্যবহার
         const tempApp = initializeApp(firebaseConfig, "SecondaryApp");
         const tempAuth = getAuth(tempApp);
         const userCredential = await createUserWithEmailAndPassword(tempAuth, email, password);
@@ -400,6 +400,7 @@
       }
     };
 
+    // [ফাংশন ৬]: সিস্টেম থেকে লগআউট করার ফাংশন
     window.logoutUser = () => {
       signOut(auth).then(() => {
         document.getElementById("dashboard").classList.add("hidden");
@@ -407,6 +408,7 @@
       });
     };
 
+    // [ফাংশন ৭]: লগইন সফল হলে ড্যাশবোর্ড দেখানো এবং ইউজার রোল অনুযায়ী অপশন চালু করার ফাংশন
     function showDashboard(email, role) {
       document.getElementById("login-box").classList.add("hidden");
       document.getElementById("dashboard").classList.remove("hidden");
@@ -419,10 +421,11 @@
         document.getElementById("admin-create-container").classList.add("hidden");
       }
 
-      loadCustomerList();
+      loadCustomerListRealtime();
       setDefaultTxnDate();
     }
 
+    // [ফাংশন ৮]: নতুন কাস্টমার বা অ্যাকাউন্ট হোল্ডার ডাটাবেসে সেভ করার ফাংশন
     window.addCustomer = async () => {
       const name = document.getElementById("customer-name").value.trim();
       const phone = document.getElementById("customer-phone").value.trim();
@@ -443,33 +446,43 @@
         alert("Customer added successfully!");
         document.getElementById("customer-name").value = "";
         document.getElementById("customer-phone").value = "";
-        loadCustomerList();
       } catch (e) {
         alert("Error: " + e.message);
       }
     };
 
-    async function loadCustomerList() {
+    // [ফাংশন ৯]: রিয়েল-টাইমে (onValue) কাস্টমারদের তালিকা ড্রপডাউনে লোড করার ফাংশন
+    function loadCustomerListRealtime() {
       const select = document.getElementById("customer-select");
-      select.innerHTML = '<option value="">-- Select Customer --</option>';
-      
-      const snapshot = await get(child(ref(db), 'customers'));
-      if (snapshot.exists()) {
-        snapshot.forEach((childSnapshot) => {
-          const customerId = childSnapshot.key;
-          const data = childSnapshot.val();
-          const option = document.createElement("option");
-          option.value = customerId;
-          option.textContent = `${data.name} (${data.phone})`;
-          select.appendChild(option);
-        });
-      }
+      const customersRef = ref(db, 'customers');
+
+      onValue(customersRef, (snapshot) => {
+        const selectedValue = select.value; // বর্তমানে সিলেক্ট করা কাস্টমার ধরে রাখা
+        select.innerHTML = '<option value="">-- Select Customer --</option>';
+
+        if (snapshot.exists()) {
+          snapshot.forEach((childSnapshot) => {
+            const customerId = childSnapshot.key;
+            const data = childSnapshot.val();
+            const option = document.createElement("option");
+            option.value = customerId;
+            option.textContent = `${data.name} (${data.phone})`;
+            select.appendChild(option);
+          });
+        }
+        select.value = selectedValue; // আপডেট হওয়ার পরও আগের সিলেকশন ঠিক রাখা
+      });
     }
 
-    window.loadCustomerData = async () => {
+    // [ফাংশন ১০]: নির্দিষ্ট কাস্টমার সিলেক্ট করলে রিয়েল-টাইমে তার ব্যালেন্স ও ইতিহাস দেখানোর ফাংশন
+    window.loadCustomerData = () => {
       const customerId = document.getElementById("customer-select").value;
       const detailsDiv = document.getElementById("customer-details");
       const historyContainer = document.getElementById("history-section-container");
+
+      // আগের কাস্টমারের রিয়েল-টাইম লিসেনার থাকলে তা বন্ধ করা
+      if (unsubscribeBalance) unsubscribeBalance();
+      if (unsubscribeHistory) unsubscribeHistory();
 
       if (!customerId) {
         detailsDiv.style.display = "none";
@@ -480,19 +493,23 @@
       detailsDiv.style.display = "block";
       historyContainer.style.display = "block";
       setDefaultTxnDate();
-      
-      const snapshot = await get(ref(db, 'customers/' + customerId));
-      if (snapshot.exists()) {
-        const bal = snapshot.val().balance || 0;
-        document.getElementById("current-balance").innerHTML = bal < 0 
-          ? `<span style="color:red;">${bal} BDT (Loan)</span>` 
-          : `<span style="color:var(--success);">${bal} BDT</span>`;
-      }
+
+      // রিয়েল-টাইম ব্যালেন্স আপডেট (onValue)
+      const custRef = ref(db, 'customers/' + customerId);
+      unsubscribeBalance = onValue(custRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const bal = snapshot.val().balance || 0;
+          document.getElementById("current-balance").innerHTML = bal < 0 
+            ? `<span style="color:red;">${bal} BDT (Loan)</span>` 
+            : `<span style="color:var(--success);">${bal} BDT</span>`;
+        }
+      });
 
       currentPage = 1;
-      loadHistory(customerId);
+      loadHistoryRealtime(customerId);
     };
 
+    // [ফাংশন ১১]: জমা (Deposit) বা খরচ (Withdraw) লেনদেন সম্পন্ন করার ফাংশন
     window.handleTransaction = async (type) => {
       const customerId = document.getElementById("customer-select").value;
       const amount = parseFloat(document.getElementById("txn-amount").value);
@@ -529,88 +546,98 @@
         document.getElementById("txn-amount").value = "";
         document.getElementById("txn-note").value = "";
         setDefaultTxnDate();
-        loadCustomerData();
       } catch (e) {
         alert("Error: " + e.message);
       }
     };
 
+    // [ফাংশন ১২]: তারিখ অনুযায়ী রিপোর্ট ফিল্টার করার ফাংশন
     window.applyDateFilter = () => {
       const customerId = document.getElementById("customer-select").value;
       if (customerId) {
         currentPage = 1;
-        loadHistory(customerId);
+        loadHistoryRealtime(customerId);
       }
     };
 
+    // [ফাংশন ১৩]: তারিখের ফিল্টার রিসেট করে ডিফল্ট অবস্থায় ফিরিয়ে আনার ফাংশন
     window.resetDateFilter = () => {
       document.getElementById("filter-start-date").value = "";
       document.getElementById("filter-end-date").value = "";
       const customerId = document.getElementById("customer-select").value;
       if (customerId) {
         currentPage = 1;
-        loadHistory(customerId);
+        loadHistoryRealtime(customerId);
       }
     };
 
+    // [ফাংশন ১৪]: টেবিলের পেজ পরিবর্তন (Previous / Next) করার ফাংশন
     window.changePage = (direction) => {
       currentPage += direction;
       renderTablePage();
     };
 
-    async function loadHistory(customerId) {
+    // [ফাংশন ১৫]: রিয়েল-টাইমে (onValue) লেনদেনের ইতিহাস লোড ও ব্যালেন্স হিসাব করার ফাংশন
+    function loadHistoryRealtime(customerId) {
+      if (unsubscribeHistory) unsubscribeHistory();
+
       const historyBody = document.getElementById("history-body");
       const historyFooter = document.getElementById("history-footer");
       historyBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Loading...</td></tr>`;
       historyFooter.innerHTML = "";
 
-      const snapshot = await get(ref(db, 'ledger_history'));
-      let transactions = [];
-      if (snapshot.exists()) {
-        snapshot.forEach((childSnapshot) => {
-          let data = childSnapshot.val();
-          data.id = childSnapshot.key;
-          if (data.customerId === customerId) {
-            transactions.push(data);
+      const historyRef = ref(db, 'ledger_history');
+      unsubscribeHistory = onValue(historyRef, (snapshot) => {
+        let transactions = [];
+        if (snapshot.exists()) {
+          snapshot.forEach((childSnapshot) => {
+            let data = childSnapshot.val();
+            data.id = childSnapshot.key;
+            if (data.customerId === customerId) {
+              transactions.push(data);
+            }
+          });
+        }
+
+        // পুরনো থেকে নতুন সাজিয়ে প্রতিটি লেনদেনের পরের অবশিষ্ট ব্যালেন্স হিসাব করা
+        transactions.sort((a, b) => a.timestamp - b.timestamp);
+
+        let runningBalance = 0;
+        transactions.forEach(data => {
+          if (data.type === 'deposit') {
+            runningBalance += data.amount;
+          } else {
+            runningBalance -= data.amount;
           }
+          data.runningBalance = runningBalance;
         });
-      }
 
-      transactions.sort((a, b) => a.timestamp - b.timestamp);
+        // টেবিলে দেখানোর জন্য নতুন লেনদেনগুলো উপরে রাখা
+        transactions.sort((a, b) => b.timestamp - a.timestamp);
 
-      let runningBalance = 0;
-      transactions.forEach(data => {
-        if (data.type === 'deposit') {
-          runningBalance += data.amount;
-        } else {
-          runningBalance -= data.amount;
-        }
-        data.runningBalance = runningBalance;
+        const startDateVal = document.getElementById("filter-start-date").value;
+        const endDateVal = document.getElementById("filter-end-date").value;
+
+        allFilteredTransactions = transactions.filter(data => {
+          if (!startDateVal && !endDateVal) return true;
+          const txnDate = new Date(data.timestamp);
+          
+          if (startDateVal) {
+            const startDate = new Date(startDateVal + "T00:00:00");
+            if (txnDate < startDate) return false;
+          }
+          if (endDateVal) {
+            const endDate = new Date(endDateVal + "T23:59:59");
+            if (txnDate > endDate) return false;
+          }
+          return true;
+        });
+
+        renderTablePage();
       });
-
-      transactions.sort((a, b) => b.timestamp - a.timestamp);
-
-      const startDateVal = document.getElementById("filter-start-date").value;
-      const endDateVal = document.getElementById("filter-end-date").value;
-
-      allFilteredTransactions = transactions.filter(data => {
-        if (!startDateVal && !endDateVal) return true;
-        const txnDate = new Date(data.timestamp);
-        
-        if (startDateVal) {
-          const startDate = new Date(startDateVal + "T00:00:00");
-          if (txnDate < startDate) return false;
-        }
-        if (endDateVal) {
-          const endDate = new Date(endDateVal + "T23:59:59");
-          if (txnDate > endDate) return false;
-        }
-        return true;
-      });
-
-      renderTablePage();
     }
 
+    // [ফাংশন ১৬]: ফিল্টার ও পেজিনেশন অনুযায়ী টেবিলের রো এবং ফুটার তৈরি করার ফাংশন
     function renderTablePage() {
       const historyBody = document.getElementById("history-body");
       const historyFooter = document.getElementById("history-footer");
@@ -636,9 +663,11 @@
         let itemsToDisplay = [];
 
         if (isFiltered) {
+          // ডেট ফিল্টার চালু থাকলে সব ডাটা একসাথে দেখাবে
           itemsToDisplay = allFilteredTransactions;
           paginationWrapper.style.display = "none";
         } else {
+          // ডিফল্ট অবস্থায় প্রতি পেজে ৫টি করে ডাটা দেখাবে
           paginationWrapper.style.display = "flex";
           const totalPages = Math.ceil(allFilteredTransactions.length / rowsPerPage);
           if (currentPage > totalPages) currentPage = totalPages;
@@ -668,7 +697,6 @@
             ? `<span style="color: red; font-weight: bold;">${data.runningBalance} BDT (Loan)</span>` 
             : `<span style="color: #333; font-weight: bold;">${data.runningBalance} BDT</span>`;
 
-          // Escape note to prevent quote/syntax issues in HTML onclick attributes
           const safeNote = (data.note || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
           const actionBtnHtml = (currentRole === "admin") 
@@ -709,6 +737,7 @@
       }
     }
 
+    // [ফাংশন ১৭]: এডমিন দ্বারা লেনদেনের নোট, পরিমাণ ও তারিখ এডিট করার ফাংশন
     window.editTransaction = async (txnId, oldNote, oldAmount, txnType, customerId, oldTimestamp) => {
       if (currentRole !== "admin") {
         alert("Permission Denied! Only Admin can edit transactions.");
@@ -763,12 +792,12 @@
         });
 
         alert("Transaction updated successfully!");
-        loadCustomerData();
       } catch (e) {
         alert("Update error: " + e.message);
       }
     };
 
+    // [ফাংশন ১৮]: এডমিন দ্বারা লেনদেন ডিলিট করার এবং মূল ব্যালেন্স সমন্বয় করার ফাংশন
     window.deleteTransaction = async (txnId, amount, txnType, customerId) => {
       if (currentRole !== "admin") {
         alert("Permission Denied! Only Admin can delete transactions.");
@@ -790,7 +819,6 @@
         await remove(ref(db, 'ledger_history/' + txnId));
 
         alert("Transaction deleted successfully!");
-        loadCustomerData();
       } catch (e) {
         alert("Delete error: " + e.message);
       }
