@@ -143,7 +143,7 @@
   <div id="dashboard" class="hidden">
     <div class="box">
       <button class="logout-btn" onclick="logoutUser()">Logout</button>
-      <h2>Personal Account Ledger</h2>
+      <h2>ব্যক্তিগত হিসাব</h2>
       <p>Logged in User: <span id="user-email-display" style="font-weight: bold;"></span> (<span id="user-role-display" style="color:var(--primary); font-weight:bold;"></span>)</p>
     </div>
 
@@ -166,24 +166,24 @@
     <!-- ১. নতুন অ্যাকাউন্ট হোল্ডার যোগ করার ফর্ম -->
     <div>
       <div class="section-header" onclick="toggleSection('add-customer-content')">
-        <span>👤 Add New Account</span> <span>▼</span>
+        <span>👤 নতুন হিসাব খুলুন</span> <span>▼</span>
       </div>
       <div id="add-customer-content" class="box section-content">
         <input type="text" id="customer-name" placeholder="Account Holder Name">
         <input type="text" id="customer-phone" placeholder="Mobile Number">
-        <button onclick="addCustomer()">Save New Account Holder</button>
+        <button onclick="addCustomer()">নতুন হিসাব সংরক্ষণ</button>
       </div>
     </div>
 
     <!-- ২. লেনদেন (জমা/খরচ) করার সেকশন -->
     <div>
       <div class="section-header" onclick="toggleSection('transaction-content')">
-        <span>💳 Perform Transaction</span> <span>▼</span>
+        <span>💳 লেনদেন করুন</span> <span>▼</span>
       </div>
       <div id="transaction-content" class="box section-content active">
-        <label for="customer-select">Select Account Holder:</label>
+        <label for="customer-select">হিসাবের নাম দিন:</label>
         <select id="customer-select" onchange="loadCustomerData()">
-          <option value="">-- Select Account --</option>
+          <option value="">--নির্বাচন করুন --</option>
         </select>
 
         <div id="customer-details" style="display:none;">
@@ -194,8 +194,8 @@
           <label for="txn-date" style="font-size: 0.85em; font-weight: bold; color: #555;">Transaction Date & Time:</label>
           <input type="datetime-local" id="txn-date">
 
-          <input type="number" id="txn-amount" placeholder="Amount (e.g., 500)">
-          <input type="text" id="txn-note" placeholder="Remarks / Note (e.g., Cash Deposit)">
+          <input type="number" id="txn-amount" placeholder="টাকা">
+          <input type="text" id="txn-note" placeholder="লেনদেনের বিবরণ লিখুন">
 
           <div style="display: flex; gap: 10px;">
             <button class="btn-deposit" onclick="handleTransaction('deposit')">জমা(+)</button>
@@ -208,7 +208,7 @@
     <!-- ৩. ট্রানজেকশন হিস্টোরি এবং রিপোর্ট সেকশন -->
     <div id="history-section-container" style="display:none;">
       <div class="section-header" onclick="toggleSection('history-content')">
-        <span>📊 Transaction History & Report</span> <span>▼</span>
+        <span>📊 লেনদেনের হিস্টরি দেখুন</span> <span>▼</span>
       </div>
       <div id="history-content" class="box section-content active">
         
